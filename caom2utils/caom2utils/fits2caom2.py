@@ -1562,9 +1562,6 @@ class GenericParser:
 
     def _apply_blueprint_to_generic(self):
 
-        # pointers that are short to type
-        exts = self.blueprint._extensions
-        wcs_std = self.blueprint._wcs_std
         plan = self.blueprint._plan
 
         #  first apply the functions
@@ -2313,9 +2310,12 @@ class FitsParser(GenericParser):
                 for index, header in enumerate(self.headers):
                     for keywords in value[0]:
                         for keyword in keywords.split(','):
-                            if not header.get(keyword.strip()):
+                            if (not header.get(keyword.strip()) and
+                                keyword == keywords and  # checking a string
+                                    keywords == value[0][-1]):  # last item
                                 # apply a default if a value does not already
-                                # exist
+                                # exist, and all possible values of
+                                # keywords have been checked
                                 _set_by_type(header, keyword.strip(), value[1])
                                 logging.debug(
                                     '{}: set default value of {} in HDU {}.'.
@@ -2436,7 +2436,8 @@ class FitsParser(GenericParser):
         if current is None:
             prop_id = self._get_from_list('Observation.proposal.id', index=0)
             pi = self._get_from_list('Observation.proposal.pi', index=0)
-            project = self._get_from_list('Observation.proposal.project', index=0)
+            project = self._get_from_list('Observation.proposal.project',
+                                          index=0)
             title = self._get_from_list('Observation.proposal.title', index=0)
         else:
             prop_id = self._get_from_list('Observation.proposal.id', index=0,
@@ -2536,8 +2537,8 @@ class FitsParser(GenericParser):
             geo_z = _to_float(
                 self._get_from_list('Observation.telescope.geoLocationZ',
                                     index=0, current=current.geo_location_z))
-            keywords = self._get_set_from_list('Observation.telescope.keywords',
-                                               index=0)  # TODO
+            keywords = self._get_set_from_list(
+                'Observation.telescope.keywords', index=0)  # TODO
             if keywords is None:
                 keywords = current.keywords
         self.logger.debug('End Telescope augmentation.')

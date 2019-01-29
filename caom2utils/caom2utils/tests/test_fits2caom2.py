@@ -81,6 +81,7 @@ from caom2 import Artifact, ProductType, ReleaseType, ObservationIntentType
 from caom2 import get_differences, obs_reader_writer, ObservationReader, Chunk
 from caom2 import SpectralWCS, TemporalWCS, PolarizationWCS, SpatialWCS
 from caom2 import Axis, CoordAxis1D, CoordAxis2D
+import logging
 
 import caom2utils
 
@@ -946,6 +947,8 @@ EXPECTED_GENERIC_PARSER_FILE_SCHEME_XML = """<?xml version='1.0' encoding='UTF-8
   <caom2:planes>
     <caom2:plane caom2:id="00000000-0000-0000-8ffa-fc0a5a8759df">
       <caom2:productID>test_product_id</caom2:productID>
+      <caom2:dataProductType>image</caom2:dataProductType>
+      <caom2:calibrationLevel>3</caom2:calibrationLevel>
       <caom2:artifacts>
         <caom2:artifact caom2:id="00000000-0000-0000-8ffa-fc0a5a8759df">
           <caom2:productType>thumbnail</caom2:productType>
@@ -1248,16 +1251,15 @@ def test_get_vos_meta():
 
 
 @pytest.mark.skipif(single_test, reason='Single test mode')
-def test_generic_parser():
+def test_generic_parser1():
     test_key = 'Plane.metaRelease'
     test_value = '2013-10-10'
     test_blueprint = ObsBlueprint()
     test_blueprint.set(test_key, '2013-10-10')
-    import logging
     logging.error(test_blueprint)
     test_parser = GenericParser()
     assert test_parser._blueprint._plan[test_key] == \
-           (['RELEASE', 'REL_DATE'], None), 'default value changed'
+        (['RELEASE', 'REL_DATE'], None), 'default value changed'
     test_parser.blueprint = test_blueprint
     assert test_parser._blueprint._plan[test_key] == test_value, \
         'original value over-ridden'
@@ -1278,6 +1280,34 @@ def test_get_external_headers():
         assert test_headers[0]['SIMPLE'] is True, 'SIMPLE header not found'
     finally:
         requests.Session.get = get_orig
+
+
+@pytest.mark.skipif(single_test, reason='Single test mode')
+def test_apply_blueprint():
+    # test a Gemini case where there are two keywords, one each for
+    # different instruments, and the default ends up getting set when the
+    # other keyword is not found, as opposed to when both keywords are
+    # missing
+    #
+    # default should only be set when both keywords are not found
+    hdr1 = fits.Header()
+    hdr1['ORIGIN'] = '123'
+    test_blueprint = ObsBlueprint()
+    test_blueprint.set_default('Plane.provenance.producer', 'abc')
+    test_blueprint.add_fits_attribute('Plane.provenance.producer', 'IMAGESWV')
+    test_parser = FitsParser(src=[hdr1], obs_blueprint=test_blueprint)
+    logging.error(test_parser._headers)
+    assert test_parser._headers[0]['ORIGIN'] == '123', 'existing over-ridden'
+    with pytest.raises(KeyError):
+        result = test_parser._headers[0]['IMAGESWV'], 'should not be set'
+
+    hdr1 = fits.Header()
+    test_parser = FitsParser(src=[hdr1], obs_blueprint=test_blueprint)
+    logging.error(test_parser._headers)
+    assert test_parser._headers[0]['ORIGIN'] == 'abc', 'should be set'
+
+    with pytest.raises(KeyError):
+        result = test_parser._headers[0]['IMAGESWV'], 'should not be set'
 
 
 def _get_headers(subject):
